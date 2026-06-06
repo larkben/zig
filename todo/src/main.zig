@@ -143,6 +143,10 @@ const TaskList = struct {
         return TaskList{ .list_name = list_name, .allocator = allocator };
     }
 
+    pub fn getTaskname(self: *TaskList) []const u8 {
+        return self.list_name;
+    }
+
     // move the tui logic to here?
     pub fn addTask(self: *TaskList, task_name: []const u8) void {
         self.tasks.append(self.allocator, Task{ .task_name = task_name, .task_id = self.id });
@@ -171,6 +175,57 @@ const TaskList = struct {
             i = i + 1;
         }
     }
+};
+
+const TodoApplication = struct {
+    task_lists: std.ArrayList(TaskList) = .empty,
+    allocator: std.mem.Allocator,
+    current_list: u64,
+
+    pub fn initApp(allocator: std.mem.Allocator) TodoApplication {
+        return TodoApplication{ .allocator = allocator };
+    }
+
+    pub fn createTodoList(self: *TodoApplication, list_name: []const u8) void {
+        const temp_list = TaskList.initTask(list_name, self.allocator);
+        self.task_lists.append(self.allocator, temp_list);
+    }
+
+    pub fn deleteTodoList(self: *TodoApplication, list_name: []const u8) void {
+        var index = 0;
+        for (self.task_lists.items) |i| {
+            if (std.mem.eql(u8, list_name, i.getTaskname())) {
+                const list_index: usize = @intCast(index);
+                self.task_lists.orderedRemove(list_index);
+            }
+            index = index + 1;
+        }
+    }
+
+    pub fn printLists(self: TodoApplication) void {
+        var index = 0;
+        for (self.task_lists.items) |i| {
+            std.debug.print("{}: {}", .{ index, i.getTaskname() });
+            index = index + 1;
+        }
+    }
+
+    pub fn printCurrentList(self: TodoApplication) void {
+        for (self.task_lists.items[self.current_list].tasks.items) |i| {
+            std.debug.print("{}: {}", .{ i.getTaskId(), i.getTaskName() });
+        }
+    }
+
+    pub fn changeSelectedList(self: *TodoApplication, select_list: u64) void {
+        self.current_list = select_list;
+    }
+
+    pub fn addTask(self: *TodoApplication, task_name: []const u8) void {
+        const list_index: usize = 0;
+        self.task_lists.items[]
+    }
+
+    // remove
 };
 
 const Command = enum {
