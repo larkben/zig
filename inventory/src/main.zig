@@ -1,9 +1,6 @@
 const std = @import("std");
 const Io = std.Io;
-
-const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+const c = @import("c");
 
 pub fn main() !void {
     var db: ?*c.sqlite3 = null;
