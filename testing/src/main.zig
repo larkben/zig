@@ -2,6 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 
 const Tree = struct {
+    // * how am i able to edit this despite it being const
     name: []const u8,
 
     pub fn initTree(name: []const u8) Tree {
