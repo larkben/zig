@@ -22,6 +22,9 @@ pub fn main(init: std.process.Init) !void {
 
     var app = todo.TodoApplication.initApp(allocator, io);
 
+    // Load from File
+    try app.loadFromFile();
+
     // Clean up
     defer app.deinit();
 
@@ -129,6 +132,7 @@ pub fn main(init: std.process.Init) !void {
             },
             .exit => {
                 // exit loop
+                try app.saveToFile();
                 run = false; // or just break
             },
             .unknown => {
@@ -136,9 +140,6 @@ pub fn main(init: std.process.Init) !void {
             },
         }
     }
-
-    // Save the content on close
-    try app.saveToFile();
 }
 
 const Command = enum {

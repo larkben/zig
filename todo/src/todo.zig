@@ -2,6 +2,24 @@ const std = @import("std");
 
 const SAVE_FILE = "todo_storage.json";
 
+// DTOS - LoadFromFile Logic
+
+const TaskDto = struct {
+    task_id: u64,
+    task_name: []const u8,
+};
+
+const TaskListDto = struct {
+    list_name: []const u8,
+    tasks: []TaskDto,
+};
+
+const SaveFileDto = struct {
+    task_lists: []TaskListDto,
+};
+
+// end of DTOs
+
 pub const Task = struct {
     task_id: u64,
     task_name: []u8,
@@ -164,22 +182,78 @@ pub const TodoApplication = struct {
         return false;
     }
 
-    //* persistent sotrage (WIP)
-
     pub fn saveToFile(self: *TodoApplication) !void {
         const file = try std.Io.Dir.cwd().createFile(self.io, SAVE_FILE, .{});
-        defer file.close();
+        defer file.close(self.io);
 
-        // 2. Instantiate a modern writer wrapper targeting the file
-        // We wrap it via a fixed/buffered pipeline depending on your architecture
-        var save_buf: [1024]u8 = undefined;
-        var buffered_writer = file.writer(self.io, &save_buf);
+        var file_buffer: [4096]u8 = undefined;
+        var file_writer = file.writer(self.io, &file_buffer);
 
-        // 3. Serialize directly using the new 0.16.0 high-level API
-        // Format: value(value_to_serialize, options_struct, writer_pointer)
-        try std.json.Stringify.value(&self.task_lists.items, .{ .whitespace = .indent_4 }, // Cleanly formats your JSON output file
-            &buffered_writer);
+        var w: std.json.Stringify = .{
+            .writer = &file_writer.interface,
+            .options = .{ .whitespace = .indent_2 },
+        };
+
+        try w.beginObject();
+        try w.objectField("task_lists");
+        try w.beginArray();
+        for (self.task_lists.items) |list| {
+            try w.beginObject();
+            try w.objectField("list_name");
+            try w.write(list.list_name);
+            try w.objectField("tasks");
+            try w.beginArray();
+            for (list.tasks.items) |task| {
+                try w.beginObject();
+                try w.objectField("task_id");
+                try w.write(task.task_id);
+                try w.objectField("task_name");
+                try w.write(task.task_name);
+                try w.endObject();
+            }
+            try w.endArray();
+            try w.endObject();
+        }
+        try w.endArray();
+        try w.endObject();
+
+        try file_writer.interface.flush();
     }
 
-    //pub fn loadFromFile(self: *TodoApplication) !void {}
+    pub fn loadFromFile(self: *TodoApplication) !void {
+        const file = std.Io.Dir.cwd().openFile(self.io, SAVE_FILE, .{}) catch |err| switch (err) {
+            error.FileNotFound => return, // nothing saved yet
+            else => return err,
+        };
+        defer file.close(self.io);
+
+        var file_buffer: [4096]u8 = undefined;
+        var file_reader = file.reader(self.io, &file_buffer);
+
+        const json_data = try file_reader.interface.allocRemaining(self.allocator, .unlimited);
+        defer self.allocator.free(json_data);
+
+        const parsed = try std.json.parseFromSlice(SaveFileDto, self.allocator, json_data, .{});
+        defer parsed.deinit();
+
+        for (parsed.value.task_lists) |list_dto| {
+            const list_name = try self.allocator.dupe(u8, list_dto.list_name);
+            var task_list = TaskList.initTask(list_name, self.allocator);
+
+            try task_list.tasks.ensureTotalCapacity(self.allocator, list_dto.tasks.len);
+
+            var max_id: u64 = 0;
+            for (list_dto.tasks) |task_dto| {
+                task_list.tasks.appendAssumeCapacity(.{
+                    .task_id = task_dto.task_id,
+                    .task_name = try self.allocator.dupe(u8, task_dto.task_name),
+                });
+                if (task_dto.task_id >= max_id) max_id = task_dto.task_id + 1;
+            }
+            task_list.id = max_id;
+            task_list.num_tasks = @intCast(task_list.tasks.items.len);
+
+            try self.task_lists.append(self.allocator, task_list);
+        }
+    }
 };
