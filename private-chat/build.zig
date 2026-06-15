@@ -5,20 +5,27 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    // 2. Turn the translation output into an importable Zig module
+    const c_module = translate_c.createModule();
+
+    c_module.linkSystemLibrary("ssh", .{});
+
     const exe = b.addExecutable(.{
         .name = "private_chat",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{
-                // Here "structs" is the name you will use in your source code to
-                // import this module (e.g. `@import("structs")`). The name is
-                // repeated because you are allowed to rename your imports, which
-                // can be extremely useful in case of collisions (which can happen
-                // importing modules from different packages).
-                //.{ .name = "structs", .module = mod },
-            },
+            .imports = &.{.{
+                .name = "c",
+                .module = c_module,
+            }},
         }),
     });
 
